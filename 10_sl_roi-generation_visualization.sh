@@ -18,7 +18,6 @@ mkdir -p ${tmp_dir}
 wb_command -scene-file-relocate surface_figures.scene  ${tmp_dir}/surface_figures.scene
 cd ${tmp_dir}
 
-
 # generate workbench surface plots
 sed "s/sub-01/${subject}/g" surface_figures.scene > surface_figures_${subject}.scene
 wb_command -scene-capture-image surface_figures_${subject}.scene "fstat_on_surf" ${roi_generation_vis_dir}/fstat_on_surf_${subject}.png \

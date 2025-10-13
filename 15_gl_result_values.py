@@ -3,15 +3,10 @@
 """
 Generate all result values to be used in the text.
 """
-
-
-
-
 import sys
 import os
 import pickle
 import numpy as np
-
 
 
 study_data_dir = sys.argv[1]
@@ -21,7 +16,6 @@ analysis_dir = os.path.join(study_data_dir, 'derivatives', 'analysis')
 sample_dir = os.path.join(study_data_dir, 'derivatives', 'sample_data')
 
 os.makedirs(result_dir, exist_ok=True)
-
 
 run_conditions = {"alpharem": ["alpha", "rem"], "gonogo": ["act", "non-act"]}
 

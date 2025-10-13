@@ -47,6 +47,7 @@ for method in ['bold', 'vaso']:
         delayed(utils.sample_data)(study_data_dir, subjects, method=method,
                                    roi_base_fname=f'roi_trialavg_bold_combined_fstat_dlPFC_require_p9-46v_A{area}.nii')
         for area in areas)
+
 # also quantify ROI volumes
 volume_all_areas = Parallel(n_jobs=min(len(areas), MAX_CPUS))(
     delayed(utils.estimate_roi_volume)(study_data_dir, subjects,

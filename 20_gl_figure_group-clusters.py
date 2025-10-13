@@ -14,12 +14,10 @@ from matplotlib.gridspec import GridSpec
 
 study_data_dir = sys.argv[1]
 
-
 group_clusters_dir = os.path.join(study_data_dir, 'derivatives', 'group_clusters')
 figure_dir = os.path.join(study_data_dir,'derivatives','figures')
 
 os.makedirs(figure_dir, exist_ok=True)
-
 
 # plot parameters and initalization
 plt.style.use("stylesheet.mplstyle")
@@ -32,7 +30,6 @@ for font_file in font_files:
 if 'Helvetica' in [f.name for f in font_manager.fontManager.ttflist]:
     plt.rcParams['font.family'] = 'Helvetica'
 plt.rcParams.update({'font.size': 7})
-
 
 # load data
 group_mean_smoothed_fstat = sp.load_surf_data(

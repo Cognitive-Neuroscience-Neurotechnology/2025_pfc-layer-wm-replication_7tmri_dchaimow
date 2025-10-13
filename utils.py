@@ -9,14 +9,11 @@ Study specific analysis module for Finn et al. 2019 replication study.
 #  we need to check wheter it is/can be made general enough to be moved into fmri-analysis library
 
 import pandas as pd
-import sys
 import os
 import numpy as np
 import nibabel as nib
 
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../fmri-analysis/library"))
-import layer_analysis as analysis
+from fmri_analysis import layer_analysis as analysis
 
 # lets start by writing a function that samples data for a single subject
 # we first define layers, optionally introducing a depth gap

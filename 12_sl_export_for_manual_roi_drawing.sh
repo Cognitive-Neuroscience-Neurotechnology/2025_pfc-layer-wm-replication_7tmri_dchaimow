@@ -4,14 +4,12 @@ subject=$2
 
 export FSLOUTPUTTYPE=NIFTI
 
-
 fs_dir=${studyDataDir}/derivatives/freesurfer/${subject}
 preprocess_dir=${studyDataDir}/derivatives/preprocess/${subject}
 register_dir=${studyDataDir}/derivatives/register/${subject}
 roi_dir=${studyDataDir}/derivatives/roi/${subject}
 trialavg_dir=${studyDataDir}/derivatives/trialavg/${subject}
 export_dir=${studyDataDir}/derivatives/export_for_manual_roi/${subject}
-
 
 mkdir -p ${export_dir}
 cd ${export_dir}

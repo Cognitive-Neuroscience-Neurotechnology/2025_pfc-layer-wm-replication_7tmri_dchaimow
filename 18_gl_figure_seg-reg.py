@@ -12,10 +12,8 @@ import os
 studyDataDir = sys.argv[1]
 subjects = [f'sub-{i:02d}' for i in range(1, 22)]  # subjects are sub-01 to sub-21
 
-
 figure_dir = f'{studyDataDir}/derivatives/figures/'
 os.makedirs(figure_dir, exist_ok=True)
-
 
 # 2nd: compose the figure
 import matplotlib.pyplot as plt
@@ -33,14 +31,6 @@ for i, subject in enumerate(subjects):
     axs[i//7, i%7].axis('off')
     axs[i//7, i%7].set_title(f'Subject {i+1}')
 
-# annotate the figure and make publication ready
 plt.tight_layout()
 plt.savefig(os.path.join(figure_dir,f'figure_seg-reg.png'),dpi=600)
-# close the figure
 plt.close()
-
-
-# figure legend:
-# Segementation and registration results for 21 subjects. For each subject the VASO slab is superimposed on the T1w image obtained from MP2RAGE. 
-# Additionally the reconstructed white matter and pial surfaces are shown in red and blue, respectively. 
-# Finally the ROI separated into superficial and deep layers is shown superimposed on the VASO slab..

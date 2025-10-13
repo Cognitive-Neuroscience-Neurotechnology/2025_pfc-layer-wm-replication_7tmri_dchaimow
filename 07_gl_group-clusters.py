@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), "../fmri-analysis/library"))
 from fmri_analysis import layer_analysis as analysis
 from fmri_analysis.group_fslr_analysis import group_fslr_analysis
 from fmri_analysis.cluster_surface import cluster_surface

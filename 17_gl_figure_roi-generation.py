@@ -23,7 +23,6 @@ roi_generation_vis_dir = os.path.join(study_data_dir,'derivatives','roi-generati
 
 os.makedirs(figure_dir, exist_ok=True)
 
-
 # plot parameters and initalization
 plt.style.use("stylesheet.mplstyle")
 
@@ -36,9 +35,7 @@ if 'Helvetica' in [f.name for f in font_manager.fontManager.ttflist]:
     plt.rcParams['font.family'] = 'Helvetica'
 plt.rcParams.update({'font.size': 7})
 
-
-# define functions (move later)
-
+# define functions (consider moving to utils.py or elsewhere)
 def remove_borders(img):
     """Remove black and white borders from RGBA image."""
     # Convert to RGB if RGBA (ignore alpha channel for border detection)

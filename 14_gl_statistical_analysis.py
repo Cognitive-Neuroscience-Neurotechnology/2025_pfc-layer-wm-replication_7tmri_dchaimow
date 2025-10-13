@@ -17,7 +17,6 @@ also runs analysis using a layer gap of 1/3, and without slab boundary subjects?
 args:
     - studyDataDir: path to the study data directory
 """ 
-
 import sys
 from joblib import Parallel, delayed
 import pickle

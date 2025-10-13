@@ -22,9 +22,7 @@ figure_dir = os.path.join(study_data_dir,'derivatives','figures')
 analysis_dir = os.path.join(study_data_dir, 'derivatives', 'analysis')
 sample_dir = os.path.join(study_data_dir, 'derivatives', 'sample_data')
 
-
 os.makedirs(figure_dir, exist_ok=True)
-
 
 # plot parameters and initalization
 plt.style.use("stylesheet.mplstyle")
@@ -37,7 +35,6 @@ for font_file in font_files:
 if 'Helvetica' in [f.name for f in font_manager.fontManager.ttflist]:
     plt.rcParams['font.family'] = 'Helvetica'
 plt.rcParams.update({'font.size': 7})
-
 
 # load data
 with open(os.path.join(analysis_dir,f'results.pkl'), 'rb') as f:

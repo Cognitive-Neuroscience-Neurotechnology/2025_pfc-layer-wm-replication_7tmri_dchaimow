@@ -3,7 +3,6 @@
 """
 Generate figure showing SNR
 """
-
 import sys
 import os
 import numpy as np
