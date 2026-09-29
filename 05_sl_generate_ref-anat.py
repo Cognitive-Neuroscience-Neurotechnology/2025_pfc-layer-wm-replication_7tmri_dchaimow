@@ -3,15 +3,13 @@ import os
 import sys
 from fmri_analysis import layer_analysis as analysis
 import vdfs
+import utils
 
 
 studyDataDir = sys.argv[1]
 subject = sys.argv[2]
 
-try:
-    MAX_CPUS = int(os.environ['OMP_NUM_THREADS'])
-except KeyError:
-    MAX_CPUS = 1
+MAX_CPUS = utils.max_cpus()
 
 # set up directories
 fs_dir = os.path.join(studyDataDir, "derivatives", "freesurfer", subject)

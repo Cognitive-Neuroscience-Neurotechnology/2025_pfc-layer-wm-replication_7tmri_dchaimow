@@ -1,37 +1,26 @@
 #!/usr/bin/env python3
 """
-Run main analysis and save results for future visualization.
+Statistical analysis of the sampled data (13_gl_sample_data.py) for all analyses: period x condition
+ANOVAs, layer x contrast ANOVAs and a bootstrap of the signed layer x contrast interaction effect sizes,
+to be compared with Finn et al. 2019. The results are saved together with the analysis parameters.
+"""
 
-uses tenzero (trialavg5) data and 100 mm^2 target rois as main ROI size
-(but analyses data for all ROI sizes)
-
-includes:
-- main replication analysis (100 mm^2 ROI)
-- analysis of all ROI sizes (20, 40, ..., 400 mm^2)
-- analysis of 100 mm^2 ROI with depth gap of 1/3
-- analysis of 100 mm^2 ROI without slab boundary subjects
-
-also runs analysis using a layer gap of 1/3, and without slab boundary subjects?
-(100 mm^2 only)
-
-args:
-    - studyDataDir: path to the study data directory
-""" 
-import sys
-from joblib import Parallel, delayed
-import pickle
 import sys
 import os
-import utils # TODO consider movin the functions here
+import pickle
+from joblib import Parallel, delayed
+import utils
 
 study_data_dir = sys.argv[1]
-subjects = [f'sub-{i:02d}' for i in range(1, 22)]  # subjects are sub-01 to sub-21
 
-# set MAX_CPUS based on OMP_NUM_THREADS, set to 1 if not set
-try:
-    MAX_CPUS = int(os.environ['OMP_NUM_THREADS'])
-except KeyError:
-    MAX_CPUS = 1
+# trial-average time points averaged in each analysis period
+periods = {"delay": [3, 4], "response": [5, 6]}
+# contrast whose layer difference is tested in each period (Finn et al. 2019),
+# and the signed layer x contrast effect sizes (np2) found by Finn et al. 2019
+period_contrasts = {"delay": "alpha - rem", "response": "act - non-act"}
+finn_np2 = {"delay": 0.869, "response": -0.685}
+
+MAX_CPUS = utils.max_cpus()
 
 analysis_dir = os.path.join(study_data_dir, 'derivatives', 'analysis')
 os.makedirs(analysis_dir, exist_ok=True)
@@ -46,25 +35,33 @@ data_no_slab_boundary = sampled_data['data_no_slab_boundary']
 data_manual_roi = sampled_data['data_manual_roi']
 data_group_clusters = sampled_data['data_group_clusters']
 clusters_idcs = sampled_data['cluster_idcs']
+run_conditions = sampled_data['run_conditions']
+condition_contrasts = sampled_data['condition_contrasts']
+
+def analyze(data, seed_task):
+    return utils.analyze_sampled_data(data, run_conditions, condition_contrasts, periods,
+                                      period_contrasts, seed=utils.seed_for(seed_task))
 
 # 1. main replication analysis, for all areas, VASO and BOLD
 results_all_areas = dict()
 for method in ['bold', 'vaso']:
     results_all_areas[method] = Parallel(n_jobs=min(len(areas), MAX_CPUS))(
-        delayed(utils.analyze_sampled_data)(data) for data in data_all_areas[method])
+        delayed(analyze)(data, f"bootstrap:{method}:area:{int(area)}")
+        for area, data in zip(areas, data_all_areas[method]))
 
 # 2. 1/3 depth gap analysis
-results_depth_gap = utils.analyze_sampled_data(data_depth_gap)
+results_depth_gap = analyze(data_depth_gap, "bootstrap:vaso:depth_gap")
 
 # 3. With exclusion of subjects 2,3,4,7
-results_no_slab_boundary = utils.analyze_sampled_data(data_no_slab_boundary)
+results_no_slab_boundary = analyze(data_no_slab_boundary, "bootstrap:vaso:no_slab_boundary")
 
 # 4. group cluster based rois
 results_group_clusters = Parallel(n_jobs=min(len(clusters_idcs), MAX_CPUS))(
-    delayed(utils.analyze_sampled_data)(data) for data in data_group_clusters)
+    delayed(analyze)(data, f"bootstrap:vaso:cluster:{int(cluster_idx)}")
+    for cluster_idx, data in zip(clusters_idcs, data_group_clusters))
 
 # 5. manual roi
-results_manual_roi = utils.analyze_sampled_data(data_manual_roi)
+results_manual_roi = analyze(data_manual_roi, "bootstrap:vaso:manual_roi")
 
 # save the results
 with open(os.path.join(analysis_dir, f'results.pkl'), 'wb') as f:
@@ -73,4 +70,7 @@ with open(os.path.join(analysis_dir, f'results.pkl'), 'wb') as f:
         'results_depth_gap': results_depth_gap,
         'results_no_slab_boundary': results_no_slab_boundary,
         'results_group_clusters': results_group_clusters,
-        'results_manual_roi': results_manual_roi}, f)
+        'results_manual_roi': results_manual_roi,
+        'periods': periods,
+        'period_contrasts': period_contrasts,
+        'finn_np2': finn_np2}, f)

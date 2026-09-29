@@ -17,7 +17,7 @@ os.makedirs(register_dir, exist_ok=True)
 # 1. register freesurfer to epi
 subprocess.run(["register_fs-to-vasoT1_no-manual.sh",
                 os.path.join(preprocess_dir, "func_all_T1.nii"),
-                fs_dir],cwd=register_dir)
+                fs_dir], cwd=register_dir, check=True)
 # clean up
 os.remove(os.path.join(register_dir, "fs_T1.nii"))
 os.remove(os.path.join(register_dir, "fs_to_func_Warped.nii"))

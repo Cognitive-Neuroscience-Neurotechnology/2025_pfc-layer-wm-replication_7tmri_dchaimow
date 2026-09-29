@@ -16,9 +16,11 @@ env/
 # figures
 *.png
 *.svg
+!pipeline.svg
 
 # result outputs
-generate_outputs/*.txt
+figures
+results
 
 # font files
 *.ttf

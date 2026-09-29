@@ -6,11 +6,14 @@ Generate figure visualizing the ROI generation procedure
 
 import sys
 import os
-from matplotlib import pyplot as plt
-from matplotlib import font_manager
-import matplotlib
 import numpy as np
+import matplotlib
+import matplotlib.cm as cm
 import matplotlib.image as mpimg
+from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
+from matplotlib.patches import ConnectionPatch
+import utils
 
 
 study_data_dir = sys.argv[1]
@@ -23,19 +26,11 @@ roi_generation_vis_dir = os.path.join(study_data_dir,'derivatives','roi-generati
 
 os.makedirs(figure_dir, exist_ok=True)
 
+
 # plot parameters and initalization
-plt.style.use("stylesheet.mplstyle")
+utils.setup_figure_style()
 
-# set font
-font_files = font_manager.findSystemFonts(
-    fontpaths=[os.path.join(os.path.dirname(__file__), 'fonts')])
-for font_file in font_files:
-    font_manager.fontManager.addfont(font_file)
-if 'Helvetica' in [f.name for f in font_manager.fontManager.ttflist]:
-    plt.rcParams['font.family'] = 'Helvetica'
-plt.rcParams.update({'font.size': 7})
 
-# define functions (consider moving to utils.py or elsewhere)
 def remove_borders(img):
     """Remove black and white borders from RGBA image."""
     # Convert to RGB if RGBA (ignore alpha channel for border detection)
@@ -65,12 +60,6 @@ def remove_borders(img):
 
 
 # create a figure with a 2 x 4 grid layout
-# define the figure, set size
-#fig, axs = plt.subplots(2, 4, figsize=(18/2.54, 9/2.54))
-
-
-from matplotlib.gridspec import GridSpec
-
 fig = plt.figure(figsize=(18/2.54, 9/2.54))
 gs = GridSpec(2, 4, figure=fig, 
               width_ratios=[0.7, 1, 1, 0.7],  # Columns 0 and 3 are 70% the width
@@ -97,22 +86,16 @@ axs[0,0].text(0.95, 0.95, 'L', transform=axs[0,0].transAxes,
               ha='right', va='top')
 
 # add colorbar to the same axes
-
-import matplotlib.cm as cm
-cmap = cm.get_cmap('hot')
+# match the fsleyes 'red-yellow' colormap used to render the F-stat image
+cmap = matplotlib.colors.LinearSegmentedColormap.from_list('red-yellow', ['red', 'yellow'])
 norm = matplotlib.colors.Normalize(vmin=3, vmax=10)
 sm = cm.ScalarMappable(norm=norm, cmap=cmap)
 sm.set_array([])  # Empty array
 
-# # add colorbar
-# # Get the position of the image subplot
-# # Get the position of the image subplot
+# create colorbar axis manually below the image
 pos = axs[0,0].get_position()
-
-# # Create colorbar axis manually below the image
 cax = fig.add_axes([pos.x0 - 0.11, pos.y0 - 0.02, pos.width, 0.02])
 
-# # Now use regular colorbar
 cb1 = fig.colorbar(sm, cax=cax, orientation='horizontal')
 cb1.set_label('F-value', fontsize=7)
 cb1.ax.tick_params(labelsize=7)
@@ -133,9 +116,7 @@ axs[0,3].text(0.95, 0.95, 'L', transform=axs[0,3].transAxes,
 img = mpimg.imread(os.path.join(roi_generation_vis_dir,f'layer-roi-vol-vis_{subject}.png'))
 axs[1,3].imshow(img)
 axs[1,3].axis('off')
-#axs[1,3].set_title('Final ROI')
 # make title appear below the image
-#axs[1,3].title.set_position([.5, -0.1])
 axs[1,3].text(0.5, -0.06, 'Final ROI', transform=axs[1,3].transAxes,
               ha='center', va='top', fontsize=7)
 axs[1,3].text(0.05, 0.95, 'R', transform=axs[1,3].transAxes, 
@@ -166,9 +147,6 @@ pos = axs[1,1].get_position()
 fig.text(pos.x0 - 0.03, pos.y0 - 0.1, 'HCP MMP 1.0 Atlas\nGlasser et al. (2016)', ha='left', va='top', fontsize=7)
 
 
-# axs[1,1].text(0.5, -0.06, 'HCP MMP 1.0 Atlas (Glasser et al. 2016)', transform=axs[1,3].transAxes,
-#               ha='center', va='top', fontsize=7)
-
 img = mpimg.imread(os.path.join(roi_generation_vis_dir,f'roi_on_surf_{subject}.png'))
 img_cropped = remove_borders(img)
 axs[1,2].imshow(img_cropped)
@@ -178,15 +156,10 @@ pos = axs[1,2].get_position()
 fig.text(pos.x0 , pos.y0 - 0.1, 'require: cluster in p9-46v\n(allow to extend into surround)', ha='left', va='top', fontsize=7)
 
 
-# axs[1,1].text(0.5, -0.06, 'require: cluster in p9-46v', transform=axs[1,3].transAxes,
-#               ha='center', va='top', fontsize=7)
-
 
 axs[1,0].axis('off')
 
 
-
-from matplotlib.patches import ConnectionPatch
 
 # Add arrows showing the workflow
 arrows = [
@@ -213,8 +186,7 @@ for ax1, ax2, start_pos, end_pos in arrows:
     )
     fig.add_artist(arrow)
 
-# Add text on top of specific arrows
-# Example: Add text on the arrow from axs[0,1] to axs[0,2]
+# Add text on top of the arrow from axs[0,1] to axs[0,2]
 pos1 = axs[0,1].get_position()
 pos2 = axs[0,2].get_position()
 # Calculate midpoint between the two subplots
@@ -226,14 +198,8 @@ fig.text(mid_x - 0.015, mid_y + 0.1, 'cluster', ha='center', va='bottom',
 
 
 
-# annotate the figure and make publication ready
-#plt.tight_layout()
-
 # save the figure
-fig.savefig(os.path.join(figure_dir,
-                        f'figure_roi-generation.svg'), dpi=300)
-fig.savefig(os.path.join(figure_dir,
-                        f'figure_roi-generation.png'), dpi=300)
+utils.save_figure(fig, figure_dir, 'figure_roi-generation')
 plt.close()
 
 

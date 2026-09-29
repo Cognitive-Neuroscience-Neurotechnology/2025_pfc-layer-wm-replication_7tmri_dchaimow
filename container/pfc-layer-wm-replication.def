@@ -1,0 +1,218 @@
+# Container for the analysis pipeline of the pfc layer working memory replication study (see README.md).
+#
+# Contains only the software used by the pipeline (steps 00-23), with all versions pinned:
+# - steps 00-02 (anatomy: FreeSurfer, ciftify, MSM): versions of the gfae_20240902T132553Z container,
+#   in particular the conda base environment with nibabel 3.2.2, which ciftify 2.3.3 requires
+# - steps 03-23: versions of the gfae_20260509T025235Z container (AFNI 26.1.02, Ubuntu packages)
+# - Connectome Workbench 2.0.0 for all steps
+#
+# Build (without root access), from this directory (the %files section refers to files in it):
+#   apptainer build --fakeroot pfc-layer-wm-replication_<build time>.sif pfc-layer-wm-replication.def
+
+Bootstrap: docker
+# ubuntu:jammy-20260410 (= ubuntu:22.04 at the time of the gfae_20260509 build)
+From: ubuntu@sha256:962f6cadeae0ea6284001009daa4cc9a8c37e75d1f5191cf0eb83fe565b63dd7
+
+%labels
+    Description Container for the analysis pipeline of the pfc layer working memory replication study
+    Ubuntu 22.04 (ubuntu:jammy-20260410, apt packages from snapshot.ubuntu.com, 20260509T000000Z)
+    AFNI 26.1.02 (built from source, without SUMA)
+    FSL 6.0.7.13
+    FreeSurfer 7.3.2
+    ANTs 2.5.3
+    ConnectomeWorkbench 2.0.0
+    ciftify 2.3.3
+    MSM v3.0FSL (msm_ubuntu_v3)
+    nibabel 3.2.2
+    LAYNII 2.7.0
+    MATLAB_Runtime R2017b (v93)
+    SPM12_CAT12 CAT12.8.2 r2166
+    jq 1.7.1
+
+%files
+    base_env_conda_pins.txt /opt/container/base_env_conda_pins.txt
+    base_env_pip_pins.txt /opt/container/base_env_pip_pins.txt
+
+%environment
+    # CONDA (base environment with ciftify)
+    export CONDA_DIR=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+
+    # FSL
+    export FSLDIR=/opt/fsl
+    export PATH=$FSLDIR/bin/:$PATH
+    . $FSLDIR/etc/fslconf/fsl.sh
+
+    # Freesurfer
+    export FREESURFER_HOME=/opt/freesurfer
+    export FS_LICENSE=~/license.txt
+    export SUBJECTS_DIR=$FREESURFER_HOME/subjects
+    . $FREESURFER_HOME/SetUpFreeSurfer.sh
+
+    # AFNI
+    export PATH="/opt/afni/bin:$PATH"
+
+    # SPM12 with CAT12
+    export SPM_HOME=/opt/spm12
+    export MCR_HOME=/opt/mcr/v93
+    export MCR_INHIBIT_CTF_LOCK=1
+    export SPM_HTML_BROWSER=0
+
+    # ANTS
+    export PATH=/opt/ants/bin:$PATH
+
+    # LAYNII
+    export PATH=/opt/laynii:$PATH
+
+    # Connectome Workbench
+    export PATH=$PATH:/opt/workbench/bin_linux64
+
+    # TCL/TK (for FSL, reset by Freesurfer)
+    export FSLWISH=/usr/bin/wish
+    export FSLTCLSH=/usr/bin/tclsh
+
+%post -c /bin/bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Ubuntu packages from a fixed snapshot of the Ubuntu archive (state before the gfae_20260509 build);
+    # the snapshot is only available via https, so ca-certificates are first installed from the regular archive
+    # and then replaced by the version of the snapshot
+    apt-get update -qq
+    apt-get install -y -q --no-install-recommends ca-certificates
+    sed -i -E 's#http://(archive|security)\.ubuntu\.com/ubuntu/?#https://snapshot.ubuntu.com/ubuntu/20260509T000000Z/#' \
+        /etc/apt/sources.list
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot
+    rm -rf /var/lib/apt/lists/*
+    apt-get update -qq
+    apt-get install -y -q --no-install-recommends --allow-downgrades \
+        "ca-certificates=$(apt-cache madison ca-certificates | awk -F'|' 'NR == 1 {gsub(/ /, "", $2); print $2}')"
+
+    # runtime packages (installed explicitly, so that they are kept when the build packages are removed)
+    apt-get install -y -q --no-install-recommends \
+        ca-certificates wget curl unzip bzip2 git \
+        locales bc tcsh parallel \
+        file dc libgomp1 libquadmath0 libgtk2.0-0 mesa-utils libosmesa6 tcl tk \
+        libopenblas-dev \
+        python3 zlib1g libexpat1 libf2c2 qhull-bin \
+        libxm4 libxt6 libxpm4 libxmu6 libxi6 libx11-6 libxext6 libjpeg62 \
+        libncurses5 xorg
+    sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
+
+    # AFNI 26.1.02, built from source (programs, tcsh and python scripts, GUI (required for 3dDeconvolve,
+    # which links AFNI's X-dependent library); no SUMA or R), before conda is installed, so that no conda
+    # libraries are used; nifti and gifti libraries pinned to the commits current at the time of the release
+    # (AFNI would otherwise fetch their current versions)
+    build_packages="build-essential cmake ninja-build f2c libf2c2-dev zlib1g-dev libexpat1-dev libqhull-dev
+                    libmotif-dev libjpeg62-dev libxt-dev libxpm-dev libxmu-dev libxi-dev libx11-dev libxext-dev"
+    apt-get install -y -q --no-install-recommends ${build_packages}
+    git clone --depth 1 --branch AFNI_26.1.02 https://github.com/afni/afni.git ${tmp}/afni
+    git clone https://github.com/NIFTI-Imaging/nifti_clib.git ${tmp}/nifti_clib
+    git -C ${tmp}/nifti_clib checkout 8f72d1165aa62320cc6982d6ddd71a7f6b9924c5
+    git clone https://github.com/NIFTI-Imaging/gifti_clib.git ${tmp}/gifti_clib
+    git -C ${tmp}/gifti_clib checkout d3e873d8539d9b469daf7db04093da1d7e73d4f7
+    # AFNI's cmake configuration requires the compilers to be set explicitly
+    export CC=/usr/bin/gcc CXX=/usr/bin/g++
+    cmake -S ${tmp}/afni -B ${tmp}/afni_build -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/opt/afni \
+        -DCOMP_GUI=ON \
+        -DCOMP_SUMA=OFF \
+        -DCOMP_RSTATS=OFF \
+        -DUSE_OMP=ON \
+        -DSTANDARD_PYTHON_INSTALL=OFF \
+        -DPython_EXECUTABLE=/usr/bin/python3 \
+        -DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB=${tmp}/nifti_clib \
+        -DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB=${tmp}/gifti_clib
+    ninja -C ${tmp}/afni_build install
+    # the install does not set the executable bit of the python scripts
+    chmod a+x /opt/afni/bin/*.py
+    apt-get purge -y -q ${build_packages}
+    apt-get autoremove -y -q
+
+    # Miniforge 24.3.0 with the conda base environment pinned to that of gfae_20240902T132553Z
+    # (ciftify 2.3.3 with nibabel 3.2.2)
+    wget -q https://github.com/conda-forge/miniforge/releases/download/24.3.0-0/Miniforge3-24.3.0-0-Linux-x86_64.sh -P ${tmp}
+    bash ${tmp}/Miniforge3-24.3.0-0-Linux-x86_64.sh -b -p /opt/conda
+    /opt/conda/bin/conda config --system --set auto_update_conda false
+    /opt/conda/bin/conda config --system --set show_channel_urls true
+    /opt/conda/bin/conda install -y --name base --override-channels -c conda-forge \
+        --file /opt/container/base_env_conda_pins.txt
+    /opt/conda/bin/python -m pip install --no-deps --no-cache-dir -r /opt/container/base_env_pip_pins.txt
+
+    # FSL 6.0.7.13 (the release manifest pins all FSL packages); --conda: use conda instead of mamba, as current
+    # installers (>= 3.21) call mamba with an option (--rc-file) that the pinned mamba 1.5.8 does not support
+    curl -fsSL https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/fslinstaller.py | \
+        /opt/conda/bin/python - -d /opt/fsl -V 6.0.7.13 --miniconda /opt/conda --conda --extras_dir /opt/conda/envs
+
+    # FreeSurfer 7.3.2
+    wget -q --no-check-certificate https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.3.2/freesurfer_ubuntu22-7.3.2_amd64.deb -P ${tmp}
+    apt-get install -y -q ${tmp}/freesurfer_ubuntu22-7.3.2_amd64.deb
+    ln -s /usr/local/freesurfer/7.3.2 /opt/freesurfer
+
+    # Connectome Workbench 2.0.0
+    wget -q https://www.humanconnectome.org/storage/app/media/workbench/workbench-linux64-v2.0.0.zip -P ${tmp}
+    unzip -q ${tmp}/workbench-linux64-v2.0.0.zip -d /opt
+
+    # MSM (HCP version, required by ciftify, replaces the msm of FSL)
+    wget -q https://github.com/ecr05/MSM_HOCR/releases/download/v3.0FSL/msm_ubuntu_v3 -P /opt/fsl/bin
+    mv /opt/fsl/bin/msm /opt/fsl/bin/msm_fsl
+    mv /opt/fsl/bin/msm_ubuntu_v3 /opt/fsl/bin/msm
+    chmod +x /opt/fsl/bin/msm
+
+    # ANTs 2.5.3
+    wget -q https://github.com/ANTsX/ANTs/releases/download/v2.5.3/ants-2.5.3-ubuntu-22.04-X64-gcc.zip -P ${tmp}
+    unzip -q ${tmp}/ants-2.5.3-ubuntu-22.04-X64-gcc.zip -d /opt/
+    mv /opt/ants-2.5.3 /opt/ants
+
+    # LAYNII 2.7.0
+    wget -q https://github.com/layerfMRI/LAYNII/releases/download/v2.7.0/LayNii_v2.7.0_Linux64.zip -P ${tmp}
+    unzip -q ${tmp}/LayNii_v2.7.0_Linux64.zip -d /opt/laynii
+
+    # jq 1.7.1
+    curl -fsSL --output /usr/local/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64
+    chmod +x /usr/local/bin/jq
+
+    # MATLAB Runtime R2017b (v93)
+    mkdir -p /opt/mcr
+    wget -q https://ssd.mathworks.com/supportfiles/downloads/R2017b/deployment_files/R2017b/installers/glnxa64/MCR_R2017b_glnxa64_installer.zip -P ${tmp}
+    unzip -q ${tmp}/MCR_R2017b_glnxa64_installer.zip -d ${tmp}/mcr_installer
+    ${tmp}/mcr_installer/install -mode silent -agreeToLicense yes -destinationFolder /opt/mcr
+    mv /opt/mcr/v93/bin/glnxa64/libfreetype.so.6.11.1 /opt/mcr/v93/bin/glnxa64/libfreetype.so.6.11.1.bak
+
+    # SPM12 with CAT12.8.2 r2166 (standalone, MATLAB Runtime R2017b)
+    wget -q https://www.neuro.uni-jena.de/cat12/CAT12.8.2_r2166_R2017b_MCR_Linux.zip -P ${tmp}
+    unzip -q ${tmp}/CAT12.8.2_r2166_R2017b_MCR_Linux.zip -d ${tmp}
+    mv ${tmp}/CAT12.8.2_r2166_R2017b_MCR_Linux /opt/spm12
+    chmod +x /opt/spm12/run_spm12.sh /opt/spm12/spm12
+    # single call (to build spm12.ctf while we have write permissions)
+    /opt/spm12/run_spm12.sh /opt/mcr/v93 function exit
+    # set up single spm executable
+    printf '#!/bin/bash\n/opt/spm12/run_spm12.sh /opt/mcr/v93 "$@"' > /opt/spm12/spm12_mcr/bin/spm12
+    chmod +x /opt/spm12/spm12_mcr/bin/spm12
+    ln -s /opt/spm12/spm12_mcr/bin/spm12 /usr/local/bin/spm12
+
+    # clean up
+    /opt/conda/bin/conda clean --all --yes
+    rm -rf ~/.cache/pip/* /var/lib/apt/lists/* ${tmp}
+
+%test
+    set -e
+    # conda base environment for ciftify
+    /opt/conda/bin/python -c "import nibabel, ciftify, ciftify.config; assert nibabel.__version__ == '3.2.2', nibabel.__version__"
+    # versions of the main software
+    test "$(cat ${FSLDIR}/etc/fslversion)" = "6.0.7.13"
+    grep -q "7.3.2" ${FREESURFER_HOME}/build-stamp.txt
+    wb_command -version | grep -q "Version: 2.0.0"
+    afni -ver | grep -q "AFNI_26.1.02"
+    antsRegistration --version | grep -q "2.5.3"
+    # programs used by the pipeline
+    for program in 3dTcat 3dvolreg 3dDeconvolve 1d_tool.py fslmaths fsleyes slicetimer mri_convert mris_convert \
+                   recon-all ciftify_recon_all msm antsApplyTransforms LN_MP2RAGE_DNOISE spm12 jq parallel bc tcsh; do
+        command -v ${program} > /dev/null || { echo "missing: ${program}"; exit 1; }
+    done
+    # AFNI python scripts must be executable (command -v alone does not check that)
+    test -z "$(find /opt/afni/bin -maxdepth 1 -type f -name '*.py' ! -perm -a+x)" || { echo "not executable: AFNI python scripts"; exit 1; }
+    1d_tool.py -ver > /dev/null
+    echo "all tests passed"

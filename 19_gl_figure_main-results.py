@@ -8,11 +8,13 @@ import os
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import font_manager
 from matplotlib.gridspec import GridSpec
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 from utils import create_shared_subplots
+from utils import seed_for
+from utils import setup_figure_style
+from utils import save_figure
 
 study_data_dir = sys.argv[1]
 
@@ -23,26 +25,12 @@ sample_dir = os.path.join(study_data_dir, 'derivatives', 'sample_data')
 os.makedirs(figure_dir, exist_ok=True)
 
 # parameters:
-TR=3.702
 layers = ["superficial", "deep"]
 events = {"Stim": 0, "Cue": 4, "Probe": 14}
-delay_tps = [3,4]
-response_tps = [5,6]
 hrf_delay = 6
-condition_pairs = [["alpha", "rem"],["act", "non-act"],["alpha - rem", "act - non-act"]]
-finn_np2 = [0.86, -0.68]
 
 # plot parameters and initalization
-plt.style.use("stylesheet.mplstyle")
-
-# set font
-font_files = font_manager.findSystemFonts(
-    fontpaths=[os.path.join(os.path.dirname(__file__), 'fonts')])
-for font_file in font_files:
-    font_manager.fontManager.addfont(font_file)
-if 'Helvetica' in [f.name for f in font_manager.fontManager.ttflist]:
-    plt.rcParams['font.family'] = 'Helvetica'
-plt.rcParams.update({'font.size': 7})
+setup_figure_style()
 
 # set color palette
 palette = {"alpha": "tab:blue",
@@ -53,13 +41,17 @@ palette = {"alpha": "tab:blue",
            "act - non-act": "#199396"}
 
 # load data
-with open(os.path.join(analysis_dir,f'results.pkl'), 'rb') as f:
+with open(os.path.join(analysis_dir, 'results.pkl'), 'rb') as f:
     saved_results = pickle.load(f)    
 results_all_areas = saved_results['results_all_areas']
 results_depth_gap = saved_results['results_depth_gap']
 results_no_slab_boundary = saved_results['results_no_slab_boundary']
 results_manual_roi = saved_results['results_manual_roi']
 results_group_clusters = saved_results['results_group_clusters']
+delay_tps = saved_results['periods']['delay']
+response_tps = saved_results['periods']['response']
+finn_np2 = [saved_results['finn_np2'][period] for period in ['delay', 'response']]
+period_contrasts = saved_results['period_contrasts']
 
 # load the sampled data
 with open(os.path.join(sample_dir, 'sample_data.pkl'), 'rb') as f:
@@ -71,8 +63,12 @@ data_no_slab_boundary = sampled_data['data_no_slab_boundary']
 data_manual_roi = sampled_data['data_manual_roi']
 data_group_clusters = sampled_data['data_group_clusters']
 cluster_idcs = sampled_data['cluster_idcs']
+main_area = sampled_data['main_area']
+TR = sampled_data['tr']
+# plot conditions of each run type and the contrasts in separate columns
+condition_pairs = list(sampled_data['run_conditions'].values()) + [list(sampled_data['condition_contrasts'])]
 
-def generate_timecourse_panel(gs, data, method):
+def generate_timecourse_panel(gs, data, method, plot_key):
 
     axs = create_shared_subplots(gs, row_range=[0,1], col_range=[0,1,2])
     
@@ -82,18 +78,21 @@ def generate_timecourse_panel(gs, data, method):
             
             # plot time course
             g = sns.lineplot(x="timepoint", y="signal", hue="condition",
+                             errorbar=("ci", 95),
+                             n_boot=1000,
+                             seed=seed_for(f"{plot_key}:timecourse:{row}:{column}"),
                              hue_order=condition_pair, palette=palette, ax=ax,
                              legend="brief" if row == 0 else False,
                              data=data.query("condition in @condition_pair and layer == @layer"))
 
             # mark delay and response analysis time points
             for line in g.get_lines():
-                xdata = line.get_xdata()
-                ydata = line.get_ydata()
+                xdata = np.asarray(line.get_xdata())
+                ydata = np.asarray(line.get_ydata())
                 color = line.get_color()
                 if len(xdata) == 9:
-                    ax.scatter(xdata[3:5],ydata[3:5],facecolors='white', edgecolors=color,s=12,zorder=100)
-                    ax.scatter(xdata[5:7],ydata[5:7],color=color,s=12,zorder=100)
+                    ax.scatter(xdata[delay_tps],ydata[delay_tps],facecolors='white', edgecolors=color,s=12,zorder=100)
+                    ax.scatter(xdata[response_tps],ydata[response_tps],color=color,s=12,zorder=100)
             
             # add background shading of delay and probe periods and horizontal zero line
             ax.axhline(0, linewidth=0.5, color="gray") 
@@ -141,7 +140,7 @@ def generate_timecourse_panel(gs, data, method):
 
     axs[0,0].text(-0.35,1.1, 'A', transform=axs[0,0].transAxes,size=10, weight='bold')
 
-def generate_period_contrasts_panel(gs, results, method):
+def generate_period_contrasts_panel(gs, results, method, plot_key):
 
     axs = create_shared_subplots(gs, row_range=[3], col_range=[0,1])
     
@@ -151,11 +150,13 @@ def generate_period_contrasts_panel(gs, results, method):
         ax = axs[0,column]
         with plt.rc_context({'lines.linewidth': 1}):
             g = sns.pointplot(x="layer", y="signal", hue="condition", marker='none',
+                              errorbar=("ci", 95),
+                              n_boot=1000,
+                              seed=seed_for(f"{plot_key}:contrast:{period}"),
                               ax=ax, palette=palette, data=data_contrast_plot,
                               err_kws={'linewidth': 0.5}, capsize=0.1,
                               order=['superficial','deep'])
         # add markers, according to period
-        print(g.get_lines())
         for line in [g.get_lines()[idx] for idx in [0,3]]:       
             xdata = line.get_xdata()
             ydata = line.get_ydata()
@@ -175,8 +176,6 @@ def generate_period_contrasts_panel(gs, results, method):
             ax.text(0.5,0.1,'**', transform=ax.transAxes, ha='center', fontsize=7)
         elif results["anova2"][period]["p-unc"][2] < 0.05:
             ax.text(0.5,0.1,'*', transform=ax.transAxes, ha='center', fontsize=7)
-        #ax.text(0.5,0.1,f'p={results["anova2"][period]["p-unc"][2]:.3f}',
-        #        transform=ax.transAxes, ha='center', fontsize=7)
         ax.axhline(0, linewidth=0.5, color="gray") 
 
         # set axis labels and ranges
@@ -190,22 +189,37 @@ def generate_period_contrasts_panel(gs, results, method):
 
     axs[0,0].text(-0.35,1.1, 'B', transform=axs[0,0].transAxes,size=10, weight='bold')
 
-def generate_bootstrap_panel(gs, results, method):
+def generate_bootstrap_panel(gs, results, method, plot_key):
 
     ax = gs.figure.add_subplot(gs[3, 2])
 
-    sns.stripplot(x="period", y="np2", ax=ax, data=results['np2_signed_combined_data'],
-                  orient="v", jitter=0.2, alpha=0.5, size=2, color='tab:blue', edgecolor='none')
+    previous_state = np.random.get_state()
+    try:
+        np.random.seed(seed_for(f"{plot_key}:jitter"))
+        sns.stripplot(
+            x="period",
+            y="np2",
+            ax=ax,
+            data=results["np2_signed_combined_data"],
+            orient="v",
+            jitter=0.2,
+            alpha=0.5,
+            size=2,
+            color="tab:blue",
+            edgecolor="none",
+        )
+    finally:
+        np.random.set_state(previous_state)
 
     # plot and compare effect sizes
     line_xlims = [[-0.2, 0.2], [0.8, 1.2]]
     for i in [0, 1]:
         if i == 1:
-            l0 = plt.hlines(results['np2_signed_response_est'],
-                            line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1)
+            l0 = ax.hlines(results['np2_signed_response_est'],
+                           line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1)
         else:
-            l0 = plt.hlines(results['np2_signed_delay_est'],
-                            line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1)
+            l0 = ax.hlines(results['np2_signed_delay_est'],
+                           line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1)
 
         # compare to Finn et al. 2019 (if vaso)
         if method == "vaso":
@@ -225,24 +239,26 @@ def generate_bootstrap_panel(gs, results, method):
             col.set_edgecolor("none")
             
             # plot Finn et al. 2019 effect
-            l1 = plt.hlines(finn_np2[i], line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1,
-                colors="tab:red", linestyles="dashed")
-            # plot our 95% CI in direction of Finn et al. 2019 effect
-            l2 = plt.hlines(perc95, line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1, 
-                            colors="tab:gray")
-            plt.legend([l0, l2, l1, ax.collections[0]],
-                       ["Effect (this study)",
-                        "$95^{th}$ CI",
-                        "Finn et al. (2019)"],
-                       loc="lower left")
-        else:
-            plt.legend([l0],["Effect (this study)"],loc="lower left")
-    
+            l1 = ax.hlines(finn_np2[i], line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1,
+                           colors="tab:red", linestyles="dashed")
+            # plot our one-sided 95% bound in direction of Finn et al. 2019 effect
+            l2 = ax.hlines(perc95, line_xlims[i][0] - 0.1, line_xlims[i][1] + 0.1, 
+                           colors="tab:gray")
+
+    if method == "vaso":
+        ax.legend([l0, l2, l1],
+                  ["Effect (this study)",
+                   "95% bound",
+                   "Finn et al. (2019)"],
+                  loc="lower left")
+    else:
+        ax.legend([l0], ["Effect (this study)"], loc="lower left")
+
 
     ax.set_ylabel("deep>superficial     superficial>deep")
     ax.xaxis.label.set_visible(False)    
-    ax.set_xticklabels(["delay period\n(alpha - rem)",
-                        "reponse period\n(act - non-act)"])
+    ax.set_xticklabels([f"{period} period\n({period_contrasts[period]})"
+                        for period in ["delay", "response"]])
     ax.set_yticks([-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1])
     ax.set_yticklabels(['1','','$η_p^2$','','0','','$η_p^2$','','1'])
     ax.text(-0.25,1.1, 'C', transform=ax.transAxes,size=10, weight='bold')
@@ -250,6 +266,7 @@ def generate_bootstrap_panel(gs, results, method):
     ax.set_xlim(-0.5, 1.5)
 
 def generate_figure(results, data, variant, method):
+    plot_key = f"figure19:{method}:{variant or 'main'}"
     data = data.copy()
     data["timepoint"] = data["timepoint"] * TR
    
@@ -261,28 +278,25 @@ def generate_figure(results, data, variant, method):
                   left=0, right=1, top=1, bottom=0,
                   wspace=0.02, hspace=0.02) 
     # generate panels 
-    generate_timecourse_panel(gs, data, method)
-    generate_period_contrasts_panel(gs, results, method)
-    generate_bootstrap_panel(gs, results, method)    
+    generate_timecourse_panel(gs, data, method, plot_key)
+    generate_period_contrasts_panel(gs, results, method, plot_key)
+    generate_bootstrap_panel(gs, results, method, plot_key)    
 
     # save figure
     if variant is None:
         variant = ''
     else:
         variant = f'_{variant}'
-    fig.savefig(os.path.join(figure_dir,
-                            f'figure_main-results{variant}.svg'), dpi=300)
-    fig.savefig(os.path.join(figure_dir,
-                            f'figure_main-results{variant}.png'), dpi=300)
+    save_figure(fig, figure_dir, f'figure_main-results{variant}')
     plt.close()
 
 # main figure
-generate_figure(results_all_areas['vaso'][np.where(areas == 100)[0][0]], 
-                data_all_areas['vaso'][np.where(areas == 100)[0][0]], 
+generate_figure(results_all_areas['vaso'][np.where(areas == main_area)[0][0]], 
+                data_all_areas['vaso'][np.where(areas == main_area)[0][0]], 
                 variant=None, method='vaso')
 # bold figure
-generate_figure(results_all_areas['bold'][np.where(areas == 100)[0][0]], 
-                data_all_areas['bold'][np.where(areas == 100)[0][0]], 
+generate_figure(results_all_areas['bold'][np.where(areas == main_area)[0][0]], 
+                data_all_areas['bold'][np.where(areas == main_area)[0][0]], 
                 variant='bold', method='bold')
 
 # depth gap figure

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 studyDataDir=$1
 
 # prepare HCP MMP1.0 atlas
@@ -34,8 +35,8 @@ done
 
 # prepare 0.5mm MNI template
 export FSLOUTPUTTYPE=NIFTI_GZ
-cp ${FSL_DIR}/data/standard/MNI152_T1_0.5mm.nii.gz ${resources_dir}/
-cp ${FSL_DIR}/data/standard/MNI152_T1_1mm_brain_mask.nii.gz ${resources_dir}/
+cp ${FSLDIR}/data/standard/MNI152_T1_0.5mm.nii.gz ${resources_dir}/
+cp ${FSLDIR}/data/standard/MNI152_T1_1mm_brain_mask.nii.gz ${resources_dir}/
 
 # create a 0.5mm brain mask
 flirt -in ${resources_dir}/MNI152_T1_1mm_brain_mask.nii.gz \

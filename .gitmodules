@@ -1,6 +1,6 @@
-[submodule "fmri_analysis"]
-	path = fmri_analysis
-	url = https://github.com/dchaimow/fmri_analysis
 [submodule "vdfs"]
 	path = vdfs
-	url = https://github.com/dchaimow/vdfs
+	url = https://github.com/dchaimow/vdfs.git
+[submodule "fmri_analysis"]
+	path = fmri_analysis
+	url = https://github.com/dchaimow/fmri_analysis.git

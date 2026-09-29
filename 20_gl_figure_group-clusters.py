@@ -7,29 +7,23 @@ Generate figure visualizing the group clusters for alternative ROI selection
 import sys
 import os
 from matplotlib import pyplot as plt
-from matplotlib import font_manager
 from fmri_analysis import surface_plotting as sp
 from matplotlib.gridspec import GridSpec
+import utils
 
 
 study_data_dir = sys.argv[1]
+
 
 group_clusters_dir = os.path.join(study_data_dir, 'derivatives', 'group_clusters')
 figure_dir = os.path.join(study_data_dir,'derivatives','figures')
 
 os.makedirs(figure_dir, exist_ok=True)
 
-# plot parameters and initalization
-plt.style.use("stylesheet.mplstyle")
 
-# set font
-font_files = font_manager.findSystemFonts(
-    fontpaths=[os.path.join(os.path.dirname(__file__), 'fonts')])
-for font_file in font_files:
-    font_manager.fontManager.addfont(font_file)
-if 'Helvetica' in [f.name for f in font_manager.fontManager.ttflist]:
-    plt.rcParams['font.family'] = 'Helvetica'
-plt.rcParams.update({'font.size': 7})
+# plot parameters and initalization
+utils.setup_figure_style()
+
 
 # load data
 group_mean_smoothed_fstat = sp.load_surf_data(
@@ -39,6 +33,9 @@ surf = sp.load_surface_gifti(
                  'colin.cerebral.L.flat.164k_fs_LR.surf.gii'))
 clusters = sp.load_surf_data(
     os.path.join(group_clusters_dir, 'L.164k_fs_LR.group.clusters.shape.gii'))
+# MD region labels of the clusters selected in 07_gl_group-clusters.py
+cluster_labels = {int(idx): label for idx, label in utils.read_params(
+    os.path.join(group_clusters_dir, 'selected_clusters.json'))['cluster_labels'].items()}
 atlas_fname = os.path.join(study_data_dir, 'derivatives','resources', 'Q1-Q6_RelatedValidation210.L.CorticalAreas_dil_Final_Final_Areas_Group_Colors.164k_fs_LR.label.gii')
 
 # generate 1 x 3 subplot figure
@@ -63,7 +60,7 @@ axs[0].annotate('p9-46v', xy=(-65, 25), xytext=(-140, -45),
 
 # 2. plot group clusters
 sp.plot_surf_clusters_left_hemi(clusters, surf, atlas_fname, ax=axs[1],
-                                label_dict = {6:'MD4',5:'MD3A',4:'MD3B',10:'MD2'},
+                                label_dict = cluster_labels,
                                 label_fontsize=3)
 axs[1].set_title('Group clusters')
 fig.text(1/3, 0.95, 'B', size=10, weight='bold')
@@ -78,7 +75,6 @@ fig.text(2/3, 0.95, 'C', size=10, weight='bold')
 
 
 # don't generate svg because it would contain every single vertex as a separate shape and be huge
-#fig.savefig(os.path.join(figure_dir,f'figure_group-clusters.svg'), dpi=300)
-fig.savefig(os.path.join(figure_dir,f'figure_group-clusters.png'), dpi=600)
+utils.save_figure(fig, figure_dir, 'figure_group-clusters', svg=False)
 plt.close()
 
