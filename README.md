@@ -1,4 +1,4 @@
-# Code for pfc layer working memory replication study (Finn et al., 2019)
+# Code for pfc layer working memory replication study 
 
 ## Organization
 
